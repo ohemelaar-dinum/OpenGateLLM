@@ -17,7 +17,6 @@ import streamlit as st
 
 from ui.backend.sql.models import User as UserTable
 from ui.configuration import configuration
-from ui.variables import ADMIN_PERMISSIONS
 
 logger = logging.getLogger(__name__)
 
@@ -109,8 +108,8 @@ def check_password(password: str, hashed_password: str) -> bool:
 def login(user_name: str, user_password: str, session: Session, proconnect_token=None) -> dict:
     # master login flow
     if user_name == configuration.playground.auth_master_username:
-        response = requests.get(url=f"{configuration.playground.api_url}/users/me", headers={"Authorization": f"Bearer {user_password}"})
-        if response.status_code != 404:  # only master get 404 on /users/me
+        response = requests.get(url=f"{configuration.playground.api_url}/v1/auth/me", headers={"Authorization": f"Bearer {user_password}"})
+        if response.status_code != 404:  # only master get 404 on /auth/me
             st.error(response.json()["detail"])
             st.stop()
 
@@ -127,7 +126,7 @@ def login(user_name: str, user_password: str, session: Session, proconnect_token
             limits.append({"model": model["id"], "type": "rpm", "value": None})
             limits.append({"model": model["id"], "type": "rpd", "value": None})
 
-        role = {"object": "role", "id": 0, "name": "master", "default": False, "permissions": ADMIN_PERMISSIONS, "limits": limits}
+        role = {"object": "role", "id": 0, "name": "master", "default": False, "permissions": ["admin"], "limits": limits}
         user = User(
             id=0,
             name=configuration.playground.auth_master_username,
@@ -177,17 +176,12 @@ def login(user_name: str, user_password: str, session: Session, proconnect_token
         st.error("Failed to retrieve API key. Please try again.")
         st.stop()
 
-    response = requests.get(url=f"{configuration.playground.api_url}/users/me", headers={"Authorization": f"Bearer {api_key}"})
+    response = requests.get(url=f"{configuration.playground.api_url}/v1/auth/me", headers={"Authorization": f"Bearer {api_key}"})
     if response.status_code != 200:
         st.error(response.json()["detail"])
         st.stop()
-    user = response.json()
-
-    response = requests.get(url=f"{configuration.playground.api_url}/roles/me", headers={"Authorization": f"Bearer {api_key}"})
-    if response.status_code != 200:
-        st.error(response.json()["detail"])
-        st.stop()
-    role = response.json()
+    user = response.json()["user"]
+    role = response.json()["role"]
 
     user = User(id=db_user.id, name=db_user.name, api_key_id=api_key_id, api_key=api_key, proconnect_token=proconnect_token, user=user, role=role)
 
@@ -204,17 +198,12 @@ def generate_random_password(length: int = 16) -> str:
 
 def oauth_login(session: Session, api_key: str, api_key_id: str, proconnect_token: str = None):
     """After OAuth2 login, backend will provide api_key and api_key_id in URL parameters and we use it to process the login"""
-    response = requests.get(url=f"{configuration.playground.api_url}/users/me", headers={"Authorization": f"Bearer {api_key}"})
+    response = requests.get(url=f"{configuration.playground.api_url}/v1/auth/me", headers={"Authorization": f"Bearer {api_key}"})
     if response.status_code != 200:
         st.error(response.json()["detail"])
         st.stop()
-    user = response.json()
-
-    response = requests.get(url=f"{configuration.playground.api_url}/roles/me", headers={"Authorization": f"Bearer {api_key}"})
-    if response.status_code != 200:
-        st.error(response.json()["detail"])
-        st.stop()
-    role = response.json()
+    user = response.json()["user"]
+    role = response.json()["role"]
 
     db_user = session.execute(select(UserTable).where(UserTable.name == user["name"])).scalar_one_or_none()
     if not db_user:
