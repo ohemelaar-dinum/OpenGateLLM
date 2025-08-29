@@ -1,6 +1,6 @@
 from app.clients.model import BaseModelClient as ModelClient
 from app.helpers.models.routers.strategies import RoundRobinRoutingStrategy, ShuffleRoutingStrategy
-from app.schemas.core.models import RoutingStrategy
+from app.schemas.core.configuration import RoutingStrategy
 from app.schemas.models import ModelType
 from app.utils.exceptions import WrongModelTypeException
 from app.utils.variables import ENDPOINT__AUDIO_TRANSCRIPTIONS, ENDPOINT__CHAT_COMPLETIONS, ENDPOINT__EMBEDDINGS, ENDPOINT__OCR, ENDPOINT__RERANK
