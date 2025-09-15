@@ -1,7 +1,8 @@
-from typing import Literal
+from typing import Literal, Optional
 
 import requests
 import streamlit as st
+
 from playground.configuration import configuration
 from playground.variables import MODEL_TYPE_AUDIO, MODEL_TYPE_EMBEDDINGS, MODEL_TYPE_IMAGE_TEXT_TO_TEXT, MODEL_TYPE_LANGUAGE, MODEL_TYPE_RERANK
 
@@ -108,41 +109,25 @@ def get_users(
 
     data = response.json()["data"]
 
-    # Ask backend for the list of users that have a playground token (fast single call)
-    try:
-        resp = requests.get(
-            url=f"{configuration.playground.api_url}/v1/admin/ui-users",
-            headers={"Authorization": f"Bearer {st.session_state['user'].api_key}"},
-            timeout=10,
-        )
-        if resp.status_code == 200:
-            playground_user_ids = set(resp.json().get("data", []))
-        else:
-            playground_user_ids = set()
-    except Exception:
-        playground_user_ids = set()
-
-    for user in data:
-        user["access_ui"] = True if user["id"] in playground_user_ids else False
-
     return data
 
 
-def get_limits(models: list, role: dict) -> dict:
-    limits = {}
+def format_limits(models: list, limits: Optional[list] = None) -> dict:
+    limits = st.session_state["user"].limits if limits is None else limits
+    formatted_limits = {}
     for model in models:
-        limits[model] = {"tpm": 0, "tpd": 0, "rpm": 0, "rpd": 0}
-        for limit in role["limits"]:
-            if limit["model"] == model and limit["type"] == "tpm":
-                limits[model]["tpm"] = limit["value"]
-            elif limit["model"] == model and limit["type"] == "tpd":
-                limits[model]["tpd"] = limit["value"]
-            elif limit["model"] == model and limit["type"] == "rpm":
-                limits[model]["rpm"] = limit["value"]
-            elif limit["model"] == model and limit["type"] == "rpd":
-                limits[model]["rpd"] = limit["value"]
+        formatted_limits[model] = {"tpm": 0, "tpd": 0, "rpm": 0, "rpd": 0}
+        for limit in limits:
+            if limit.model == model and limit.type == "tpm":
+                formatted_limits[model]["tpm"] = limit.value
+            elif limit.model == model and limit.type == "tpd":
+                formatted_limits[model]["tpd"] = limit.value
+            elif limit.model == model and limit.type == "rpm":
+                formatted_limits[model]["rpm"] = limit.value
+            elif limit.model == model and limit.type == "rpd":
+                formatted_limits[model]["rpd"] = limit.value
 
-    return limits
+    return formatted_limits
 
 
 def check_password(password: str) -> bool:

@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 from streamlit_extras.stylable_container import stylable_container
 
-from playground.backend.common import get_collections, get_documents, get_limits, get_models, get_roles, get_users
+from playground.backend.common import get_collections, get_documents, format_limits, get_models, get_roles, get_users
 
 
 def resources_selector(resource: Literal["collection", "role", "user", "document"], resource_filter: Any = None, per_page: int = 30):
@@ -50,14 +50,13 @@ def resources_selector(resource: Literal["collection", "role", "user", "document
         resources = get_users(
             offset=st.session_state.get(key, 0), limit=per_page, role=resource_filter, order_by=order_by, order_direction=order_direction
         )
-        new_resource = {"name": None, "access_ui": False, "expires_at": None, "id": None, "role": None}
+        new_resource = {"name": None, "expires_at": None, "id": None, "role": None}
 
         data = pd.DataFrame(
             data=[
                 {
                     "ID": user["id"],
                     "Name": user["name"],
-                    "Access UI": user["access_ui"],
                     "Expires at": pd.to_datetime(user["expires_at"], unit="s") if user["expires_at"] else None,
                     "Created at": pd.to_datetime(user["created_at"], unit="s"),
                     "Updated at": pd.to_datetime(user["updated_at"], unit="s"),
@@ -257,7 +256,7 @@ def input_new_role_limits(selected_role: dict):
         limits = (
             {model: {"rpm": None, "rpd": None, "tpm": None, "tpd": None} for model in models}
             if not st.session_state.get("new_role", False) and st.session_state["no_roles"]
-            else get_limits(models=models, role=selected_role)
+            else format_limits(models=models)
         )
         initial_limits = pd.DataFrame(
             data={
@@ -298,6 +297,19 @@ def input_new_role_limits(selected_role: dict):
 
 
 # Admin - users
+def input_new_user_email(selected_user: dict):
+    new_user_email = st.text_input(
+        label="User email",
+        placeholder="Enter user email",
+        icon=":material/email:",
+        value=selected_user.get("email"),
+        disabled=(not st.session_state.get("update_user", False) and not st.session_state.get("new_user", False))
+        or (st.session_state["no_users_in_selected_role"] and not st.session_state.get("new_user", False)),
+    )
+
+    return new_user_email
+
+
 def input_new_user_name(selected_user: dict):
     new_user_name = st.text_input(
         label="User name",
@@ -312,6 +324,16 @@ def input_new_user_name(selected_user: dict):
 
 
 def input_new_user_password():
+    current_password = st.text_input(
+        label="Current password",
+        placeholder="Enter current password",
+        type="password",
+        icon=":material/lock:",
+        disabled=(not st.session_state.get("update_user", False) and not st.session_state.get("new_user", False))
+        or (st.session_state["no_users_in_selected_role"] and not st.session_state.get("new_user", False)),
+    )
+    current_password = current_password.strip() if current_password.strip() else None
+
     new_user_password = st.text_input(
         label="Password",
         placeholder="Enter password",
@@ -320,8 +342,9 @@ def input_new_user_password():
         disabled=(not st.session_state.get("update_user", False) and not st.session_state.get("new_user", False))
         or (st.session_state["no_users_in_selected_role"] and not st.session_state.get("new_user", False)),
     )
+    new_user_password = new_user_password.strip() if new_user_password.strip() else None
 
-    return new_user_password
+    return current_password, new_user_password
 
 
 def input_new_user_role_id(selected_role: dict, roles: list):
