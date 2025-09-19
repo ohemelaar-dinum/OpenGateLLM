@@ -41,11 +41,11 @@
 
 ## 📊 Comparison
 
-| Feature              | OpenGateLLM ✅ | LiteLLM   | OpenRouter |
+| Feature              | OpenGateLLM | LiteLLM   | OpenRouter |
 | -------------------- | ------------ | --------- | ---------- |
 | OpenAI Compatibility | ✅ | ✅ | ✅ |
-| Open Source    | ✅ | ❌ | ❌ |
-| Free (all features)    | ✅ | ✅ | ❌ |
+| Open Source    | ✅ | ✅ | ❌ |
+| Free (all features)    | ✅ | ❌ | ❌ |
 | Support commercial models | ✅ | ✅ | ✅ |
 | Support self-hosted models | ✅ | ✅ | ❌ |
 | Built-in RAG         | ✅ | ❌ | ❌ |
