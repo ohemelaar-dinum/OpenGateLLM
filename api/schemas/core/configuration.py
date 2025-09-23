@@ -89,9 +89,9 @@ class ModelProviderType(str, Enum):
     @classmethod
     def get_supported_clients(cls, model_type):
         mapping = {
-            ModelType.AUTOMATIC_SPEECH_RECOGNITION: [cls.ALBERT.value, cls.OPENAI.value],
+            ModelType.AUTOMATIC_SPEECH_RECOGNITION: [cls.ALBERT.value, cls.OPENAI.value, cls.VLLM.value],
             ModelType.IMAGE_TEXT_TO_TEXT: [cls.ALBERT.value, cls.OPENAI.value, cls.VLLM.value],
-            ModelType.TEXT_EMBEDDINGS_INFERENCE: [cls.ALBERT.value, cls.OPENAI.value, cls.TEI.value],
+            ModelType.TEXT_EMBEDDINGS_INFERENCE: [cls.ALBERT.value, cls.OPENAI.value, cls.TEI.value, cls.VLLM.value],
             ModelType.TEXT_GENERATION: [cls.ALBERT.value, cls.OPENAI.value, cls.VLLM.value],
             ModelType.TEXT_CLASSIFICATION: [cls.ALBERT.value, cls.TEI.value],
         }
