@@ -20,10 +20,10 @@ const config: Config = {
   },
 
   // Set the production url of your site here
-  url: albert_api_url,
+  url: 'https://docs.opengatellm.etalab.gouv.fr',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  baseUrl: baseUrl,
+  baseUrl: '/',
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
