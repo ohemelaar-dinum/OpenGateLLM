@@ -19,21 +19,33 @@ if __name__ == "__main__":
     assert response.status_code == 200, response.text
     routers = response.json()["data"]
 
+    role_name = "my-first-role"
+    role_permissions = ["admin"]
+    role_limits = []
+
     # Create a new admin role
-    limits = []
     for router in routers:
-        limits.append({"router": router["id"], "type": "rpm", "value": None})
-        limits.append({"router": router["id"], "type": "rpd", "value": None})
-        limits.append({"router": router["id"], "type": "tpm", "value": None})
-        limits.append({"router": router["id"], "type": "tpd", "value": None})
+        role_limits.append({"router": router["id"], "type": "rpm", "value": None})
+        role_limits.append({"router": router["id"], "type": "rpd", "value": None})
+        role_limits.append({"router": router["id"], "type": "tpm", "value": None})
+        role_limits.append({"router": router["id"], "type": "tpd", "value": None})
 
     response = requests.post(
         url=f"{args.api_url}/v1/admin/roles",
         headers=headers,
-        json={"name": "my-first-role", "permissions": ["admin"], "limits": limits},
+        json={"name": role_name, "permissions": role_permissions, "limits": role_limits},
     )
-    assert response.status_code == 201, response.text
-    role_id = response.json()["id"]
+    if response.status_code == 409:
+        response = requests.get(f"{args.api_url}/v1/admin/roles", headers=headers)
+        assert response.status_code == 200, response.text
+        roles = response.json()["data"]
+        for role in roles:
+            if role["name"] == "my-first-role":
+                role_id = role["id"]
+                break
+    else:
+        assert response.status_code == 201, response.text
+        role_id = response.json()["id"]
 
     # Create a new admin user
     response = requests.post(
@@ -41,8 +53,19 @@ if __name__ == "__main__":
         headers=headers,
         json={"email": args.first_email, "name": args.first_email, "password": args.first_password, "role": role_id},
     )
-    assert response.status_code == 201, response.text
-    user_id = response.json()["id"]
+    if response.status_code == 409:
+        response = requests.get(f"{args.api_url}/v1/admin/users", headers=headers)
+        assert response.status_code == 200, response.text
+        users = response.json()["data"]
+        for user in users:
+            if user["email"] == args.first_email:
+                user_id = user["id"]
+                break
+        message = "User already exists, new api key created."
+    else:
+        message = "User created with success."
+        assert response.status_code == 201, response.text
+        user_id = response.json()["id"]
 
     # Create a new token for the admin user
     response = requests.post(url=f"{args.api_url}/v1/admin/tokens", headers=headers, json={"user": user_id, "name": "my-first-token"})
@@ -50,9 +73,18 @@ if __name__ == "__main__":
 
     key = response.json()["token"]
 
+    display_limits = "\n                   ".join([f"{router["name"]} → unlimited" for router in routers])
+
     print(f"""
-New user created:
-- Email: {args.first_email}
-- Password: {args.first_password}
-- API key: {key}
+\033[32;1m✔ {message} \033[0m
+
+\033[32;1mRole:\033[0m              {role_name}
+\033[32;1mRole permissions:\033[0m  {",".join(role_permissions)}
+\033[32;1mRole limits: \033[0m      
+                   {display_limits}
+
+\033[32;1mEmail:\033[0m             {args.first_email}
+\033[32;1mPassword:\033[0m          {args.first_password}
+
+\033[32;1mAPI key:\033[0m           {key}
 """)
