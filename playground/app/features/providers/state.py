@@ -91,13 +91,41 @@ class ProvidersState(EntityState):
         self.entities_loading = True
         yield
 
-        params = {}
+        params = {
+            "offset": (self.page - 1) * self.per_page,
+            "limit": self.per_page,
+            "order_by": self.order_by_value,
+            "order_direction": self.order_direction_value,
+        }
+
         if self.filter_router_value != "0":
             params["router"] = int(self.filter_router_value)
 
         response = None
         try:
             async with httpx.AsyncClient() as client:
+                # Load routers
+                if not self.routers_list:
+                    offset = 0
+                    self.routers_list = []
+                    self.routers_dict = {}
+                    while True:
+                        response = await client.get(
+                            url=f"{self.opengatellm_url}/v1/admin/routers",
+                            params={"offset": offset, "limit": 100},
+                            headers={"Authorization": f"Bearer {self.api_key}"},
+                            timeout=configuration.settings.playground_opengatellm_timeout,
+                        )
+
+                        response.raise_for_status()
+                        data = response.json()
+                        routers_data = data.get("data", [])
+                        self.routers_list.extend([{"id": router["id"], "name": router["name"]} for router in routers_data])
+                        self.routers_dict.update({router["name"]: router["id"] for router in routers_data})
+                        offset += 100
+                        if len(routers_data) < 100:
+                            break
+
                 response = await client.get(
                     f"{self.opengatellm_url}/v1/admin/providers",
                     params=params,
@@ -108,6 +136,7 @@ class ProvidersState(EntityState):
                 response.raise_for_status()
                 data = response.json()
                 self.entities = []
+
                 for provider in data.get("data", []):
                     if provider["user_id"] not in self.provider_owners:
                         response = await client.get(
@@ -140,22 +169,11 @@ class ProvidersState(EntityState):
 
                     self.entities.append(self._format_provider(provider))
 
+            self.has_more_page = len(self.entities) == self.per_page
         except Exception as e:
             yield httpx_error_toast(exception=e, response=response)
         finally:
             self.entities_loading = False
-            yield
-
-    ############################################################
-    # Pagination & filters
-    ############################################################
-    filter_router_value: str = "0"
-
-    @rx.event
-    async def set_filter_router(self, value: str):
-        self.filter_router_value = value
-        yield
-        async for _ in self.load_entities():
             yield
 
     ############################################################
@@ -300,3 +318,53 @@ class ProvidersState(EntityState):
         finally:
             self.create_entity_loading = False
             yield
+
+    ############################################################
+    # Pagination & filters
+    ############################################################
+    filter_router_value: str = "0"
+    per_page: int = 20
+    order_by_options: list[str] = ["id", "name", "created"]
+
+    @rx.event
+    async def set_filter_router(self, value: str):
+        self.filter_router_value = value
+        yield
+        async for _ in self.load_entities():
+            yield
+
+    @rx.event
+    async def set_order_by(self, value: str):
+        """Set order by field and reload."""
+        self.order_by_value = value
+        self.page = 1
+        self.has_more_page = False
+        yield
+        async for _ in self.load_entities():
+            yield
+
+    @rx.event
+    async def set_order_direction(self, value: str):
+        """Set order direction and reload."""
+        self.order_direction_value = value
+        self.page = 1
+        self.has_more_page = False
+        yield
+        async for _ in self.load_entities():
+            yield
+
+    @rx.event
+    async def prev_page(self):
+        if self.page > 1:
+            self.page -= 1
+            yield
+            async for _ in self.load_entities():
+                yield
+
+    @rx.event
+    async def next_page(self):
+        if self.has_more_page:
+            self.page += 1
+            yield
+            async for _ in self.load_entities():
+                yield
