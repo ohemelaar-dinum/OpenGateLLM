@@ -1,6 +1,5 @@
 import reflex as rx
 
-from app.core.configuration import configuration
 from app.features.auth.state import AuthState
 from app.shared.components.dark_mode_toggle import dark_mode_toggle
 
@@ -39,26 +38,10 @@ def navigation_sidebar() -> rx.Component:
     """Left navigation sidebar."""
     return rx.box(
         rx.vstack(
-            # Header
-            rx.hstack(
-                rx.image(
-                    src="/logo.svg",
-                    width="32px",
-                    height="32px",
-                ),
-                rx.heading(
-                    configuration.settings.app_title,
-                    size="5",
-                    color=rx.color("accent", 11),
-                ),
-                width="100%",
-                padding="1em",
-                border_bottom=f"1px solid {rx.color("mauve", 3)}",
-                align_items="center",
-            ),
             # Navigation items
             rx.vstack(
                 nav_item("Chat", "message-square", "/"),
+                rx.divider(),
                 rx.cond(
                     ~AuthState.is_master,
                     rx.box(
@@ -68,10 +51,10 @@ def navigation_sidebar() -> rx.Component:
                         width="100%",
                     ),
                 ),
+                rx.divider(),
                 rx.cond(
                     AuthState.is_admin,
                     rx.box(
-                        rx.divider(),
                         nav_item("Routers", "network", "/routers"),
                         nav_item("Providers", "container", "/providers"),
                         nav_item("Roles", "shield", "/roles"),
@@ -138,10 +121,10 @@ def navigation_sidebar() -> rx.Component:
             width="100%",
         ),
         width="250px",
-        height="100vh",
+        height="94%",
         background_color=rx.color("mauve", 2),
         border_right=f"1px solid {rx.color("mauve", 3)}",
         position="fixed",
         left="0",
-        top="0",
+        top="65px",
     )
