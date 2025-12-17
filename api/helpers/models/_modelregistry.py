@@ -26,7 +26,6 @@ from api.utils.exceptions import (
     InconsistentModelVectorSizeException,
     InsufficientBudgetException,
     InvalidProviderTypeException,
-    MissingProviderURLException,
     ModelNotFoundException,
     ProviderAlreadyExistsException,
     ProviderNotFoundException,
@@ -278,7 +277,6 @@ class ModelRegistry:
         load_balancing_strategy: RouterLoadBalancingStrategy | None,
         cost_prompt_tokens: float | None,
         cost_completion_tokens: float | None,
-        user_id: int,
         postgres_session: AsyncSession,
     ) -> None:
         """
@@ -292,13 +290,11 @@ class ModelRegistry:
             load_balancing_strategy(Optional[RouterLoadBalancingStrategy]): Optional new routing strategy
             cost_prompt_tokens(Optional[float]): Optional new cost of a million prompt tokens
             cost_completion_tokens(Optional[float]): Optional new cost of a million completion tokens
-            user_id(int): The user ID of owner of the router
             postgres_session(AsyncSession): Database postgres_session
 
         """
         # Check if model exists
         routers = await self.get_routers(router_id=router_id, name=None, postgres_session=postgres_session)
-        router = routers[0]
 
         # Check alias integrity in aliases of other routers
         if aliases:
@@ -442,13 +438,13 @@ class ModelRegistry:
         router_id: int,
         user_id: int,
         type: ProviderType,
-        url: str | None,
+        url: str,
         key: str | None,
         timeout: int,
         model_name: str,
         model_carbon_footprint_zone: ProviderCarbonFootprintZone,
-        model_carbon_footprint_total_params: int | None,
-        model_carbon_footprint_active_params: int | None,
+        model_carbon_footprint_total_params: int,
+        model_carbon_footprint_active_params: int,
         qos_metric: Metric | None,
         qos_limit: float | None,
         postgres_session: AsyncSession,
@@ -460,29 +456,19 @@ class ModelRegistry:
             router_id(int): The model router ID
             user_id(int): The user ID of owner of the provider
             type(ProviderType): Provider type
-            url(str | None): Provider URL
+            url(str): Provider URL
             key(str | None): Provider API key
             timeout(int): Request timeout
             model_name(str): Model name
-            model_carbon_footprint_zone(ProviderCarbonFootprintZone | None): ProviderCarbonFootprintZone
-            model_carbon_footprint_total_params: int | None
-            model_carbon_footprint_active_params: int | None
+            model_carbon_footprint_zone(ProviderCarbonFootprintZone): ProviderCarbonFootprintZone
+            model_carbon_footprint_total_params: int
+            model_carbon_footprint_active_params: int
             qos_metric(Metric | None): QoS metric. If None, no QoS policy is applied.
             qos_limit(float | None): Optional QoS limit
             postgres_session(AsyncSession): Database postgres_session
         Returns:
             The provider ID
         """
-        # format url
-        if url is None:
-            if type == ProviderType.OPENAI:
-                url = "https://api.openai.com"
-            elif type == ProviderType.ALBERT:
-                url = "https://albert.api.etalab.gouv.fr"
-            else:
-                raise MissingProviderURLException()
-        url = f"{url}/" if not url.endswith("/") else url
-
         # check if router exists
         routers = await self.get_routers(router_id=router_id, name=None, postgres_session=postgres_session)
         router = routers[0]
@@ -517,11 +503,6 @@ class ModelRegistry:
                 raise InconsistentModelVectorSizeException()
             if router.max_context_length != max_context_length:
                 raise InconsistentModelMaxContextLengthException()
-
-        # carbon footprint is only supported for text generation and image text to text models
-        if router.type not in [ModelType.TEXT_GENERATION, ModelType.IMAGE_TEXT_TO_TEXT]:
-            model_carbon_footprint_active_params = None
-            model_carbon_footprint_total_params = None
 
         # Create provider
         try:
@@ -560,7 +541,6 @@ class ModelRegistry:
     async def delete_provider(
         self,
         provider_id: int,
-        user_id: int,
         postgres_session: AsyncSession,
     ) -> None:
         """
@@ -569,13 +549,10 @@ class ModelRegistry:
         Args:
             router_id(int): The router ID
             provider_id(int): The provider ID
-            user_id(int): The user ID of owner of the provider
             postgres_session(AsyncSession): Database postgres_session
         """
         # Check if provider exists
         query = select(ProviderTable).where(ProviderTable.id == provider_id)
-        if user_id != 0:
-            query = query.where(ProviderTable.user_id == user_id)
         try:
             result = await postgres_session.execute(query)
             result.scalar_one()
@@ -584,8 +561,6 @@ class ModelRegistry:
 
         # Delete provider
         query = delete(ProviderTable).where(ProviderTable.id == provider_id)
-        if user_id != 0:
-            query = query.where(ProviderTable.user_id == user_id)
         await postgres_session.execute(query)
         await postgres_session.commit()
 
@@ -670,6 +645,80 @@ class ModelRegistry:
             )
 
         return providers
+
+    async def update_provider(
+        self,
+        provider_id: int,
+        router_id: int | None,
+        timeout: int | None,
+        model_carbon_footprint_zone: ProviderCarbonFootprintZone | None,
+        model_carbon_footprint_total_params: int | None,
+        model_carbon_footprint_active_params: int | None,
+        qos_metric: Metric | None,
+        qos_limit: float | None,
+        postgres_session: AsyncSession,
+    ) -> None:
+        """
+        Update a model provider by ID.
+
+        Args:
+            provider_id(int): The provider ID
+            router_id(int | None): The new router ID to assign to the provider
+            timeout(int | None): The new timeout for the provider requests
+            model_carbon_footprint_zone(ProviderCarbonFootprintZone | None): The new model carbon footprint zone
+            model_carbon_footprint_total_params(int | None): The new model carbon footprint total params
+            model_carbon_footprint_active_params(int | None): The new model carbon footprint active params
+            qos_metric(Metric | None): The new QoS metric
+            qos_limit(float | None): The new QoS limit
+            postgres_session(AsyncSession): Database postgres_session
+        """
+        # Check if provider exists
+        providers = await self.get_providers(provider_id=provider_id, router_id=None, postgres_session=postgres_session)
+        provider = providers[0]
+
+        routers = await self.get_routers(router_id=provider.router_id, name=None, postgres_session=postgres_session)
+        current_router = routers[0]
+
+        # Update provider
+        update_value = {}
+        if router_id is not None:
+            # check if new router exists
+            routers = await self.get_routers(router_id=router_id, name=None, postgres_session=postgres_session)
+            new_router = routers[0]
+
+            # provider.type is a ProviderType enum, mapping contains provider type strings
+            if provider.type.value not in self.MODEL_TYPE_TO_MODEL_PROVIDER_TYPE_MAPPING[new_router.type]:
+                raise InvalidProviderTypeException("New router type is not compatible with the provider type.")
+
+            # consistency check
+            if new_router.providers > 0:
+                if new_router.vector_size != current_router.vector_size:
+                    raise InconsistentModelVectorSizeException()
+                if new_router.max_context_length != current_router.max_context_length:
+                    raise InconsistentModelMaxContextLengthException()
+
+            update_value["router_id"] = router_id
+
+        if timeout is not None:
+            update_value["timeout"] = timeout
+        if model_carbon_footprint_zone is not None:
+            update_value["model_carbon_footprint_zone"] = model_carbon_footprint_zone
+        if model_carbon_footprint_total_params is not None:
+            update_value["model_carbon_footprint_total_params"] = model_carbon_footprint_total_params
+        if model_carbon_footprint_active_params is not None:
+            update_value["model_carbon_footprint_active_params"] = model_carbon_footprint_active_params
+        if qos_metric is not None:
+            update_value["qos_metric"] = qos_metric
+        if qos_limit is not None:
+            update_value["qos_limit"] = qos_limit
+
+        if update_value:
+            try:
+                await postgres_session.execute(update(ProviderTable).where(ProviderTable.id == provider_id).values(**update_value))
+                await postgres_session.commit()
+            except IntegrityError:
+                await postgres_session.rollback()
+                raise ProviderAlreadyExistsException("Provider already exists for the new router.")
 
     async def get_models(self, name: str | None, user_info: UserInfo, postgres_session: AsyncSession) -> list[Model]:
         """

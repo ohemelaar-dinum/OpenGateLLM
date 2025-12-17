@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_carbon_footprint(
-    active_params: int | None,
+    active_params: int,
     total_params: int | None,
     model_zone: ProviderCarbonFootprintZone,
     token_count: int,
@@ -18,8 +18,8 @@ def get_carbon_footprint(
     """Calculate carbon impact of a model inference using direct parameters.
 
     Args:
-        active_params(Optional[int]): Number of active parameters (in millions or billions, must match compute_llm_impacts expectations)
-        total_params(Optional[int]): Total number of parameters (in millions or billions, must match compute_llm_impacts expectations)
+        active_params(int): Number of active parameters (in millions or billions, must match compute_llm_impacts expectations)
+        total_params(int): Total number of parameters (in millions or billions, must match compute_llm_impacts expectations)
         model_zone(CountryCodes): Electricity mix zone (Alpha-3 of the country code)
         token_count(int): Number of output tokens
         request_latency(float): Latency of the inference (in milliseconds)
@@ -27,11 +27,15 @@ def get_carbon_footprint(
     Returns:
         CarbonFootprintUsage: Computed carbon footprint
     """
-    if total_params is None or token_count == 0:
-        return CarbonFootprintUsage(kWh=CarbonFootprintUsageKWh(min=0, max=0), kgCO2eq=CarbonFootprintUsageKgCO2eq(min=0, max=0))
+    assert request_latency >= 0, "request_latency must be a positive number"
 
-    assert token_count > 0 if total_params is not None else True, "token_count must be a positive number"
-    assert request_latency > 0, "request_latency must be a positive number"
+    # Short-circuit when we cannot (or should not) compute impacts.
+    # This avoids calling ecologits with missing model parameters and matches unit-test expectations.
+    if token_count <= 0 or active_params <= 0 or total_params in (None, 0):
+        return CarbonFootprintUsage(
+            kWh=CarbonFootprintUsageKWh(min=0.0, max=0.0),
+            kgCO2eq=CarbonFootprintUsageKgCO2eq(min=0.0, max=0.0),
+        )
 
     electricity_mix = electricity_mixes.find_electricity_mix(zone=model_zone.value)
     if not electricity_mix:

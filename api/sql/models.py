@@ -11,6 +11,7 @@ from api.schemas.admin.routers import RouterLoadBalancingStrategy
 from api.schemas.collections import CollectionVisibility
 from api.schemas.core.metrics import Metric
 from api.schemas.models import ModelType
+from api.utils.variables import DEFAULT_TIMEOUT
 
 Base = declarative_base()
 
@@ -122,8 +123,8 @@ class User(Base):
     collection: Mapped[list["Collection"]] = relationship(back_populates="user", passive_deletes=True)
     role: Mapped["Role"] = relationship(back_populates="user", passive_deletes=True)
     organization: Mapped["Organization"] = relationship(back_populates="user", passive_deletes=True)
-    router: Mapped["Router"] = relationship(back_populates="user", cascade="all, delete-orphan", passive_deletes=True)
-    provider: Mapped["Provider"] = relationship(back_populates="user", cascade="all, delete-orphan", passive_deletes=True)
+    router: Mapped[list["Router"]] = relationship(back_populates="user", cascade="all, delete-orphan", passive_deletes=True)
+    provider: Mapped[list["Provider"]] = relationship(back_populates="user", cascade="all, delete-orphan", passive_deletes=True)
 
     __table_args__ = (
         UniqueConstraint("sub", "iss", name="unique_user_email_sub_iss"),
@@ -221,11 +222,11 @@ class Provider(Base):
     type: Mapped[ProviderType]
     url: Mapped[str]
     key: Mapped[str | None]
-    timeout: Mapped[int | None]
+    timeout: Mapped[int] = mapped_column(default=DEFAULT_TIMEOUT)
     model_name: Mapped[str]
     model_carbon_footprint_zone: Mapped[ProviderCarbonFootprintZone | None]
-    model_carbon_footprint_total_params: Mapped[int | None]
-    model_carbon_footprint_active_params: Mapped[int | None]
+    model_carbon_footprint_total_params: Mapped[int] = mapped_column(default=0)
+    model_carbon_footprint_active_params: Mapped[int] = mapped_column(default=0)
     qos_metric: Mapped[Metric | None]
     qos_limit: Mapped[float | None]
     max_context_length: Mapped[int | None]
@@ -237,4 +238,4 @@ class Provider(Base):
     user: Mapped["User"] = relationship(back_populates="provider")
     usage: Mapped[list["Usage"]] = relationship(back_populates="provider", passive_deletes=True)
 
-    __table_args__ = (UniqueConstraint("url", "model_name", name="unique_provider_url_model_name"),)
+    __table_args__ = (UniqueConstraint("router_id", "url", "model_name", name="unique_provider_router_id_url_model_name"),)
