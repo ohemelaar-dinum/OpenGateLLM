@@ -60,6 +60,8 @@ async def lifespan(app: FastAPI):
     await _setup_tokenizer(configuration=configuration, global_context=global_context, dependencies=dependencies)
     await _setup_document_manager(configuration=configuration, global_context=global_context, dependencies=dependencies)
 
+    await global_context.limiter.reset()
+
     yield
 
     # cleanup resources when app shuts down
@@ -93,7 +95,7 @@ async def _setup_postgres_session(configuration: Configuration, global_context: 
 
 
 async def _setup_model_registry(configuration: Configuration, global_context: GlobalContext, dependencies: SimpleNamespace):
-    """Setup the model registry by fetching the models defined in the DB and the configuration. Basic conflict handling between the DB and config."""
+    """Set up the model registry by fetching the models defined in the DB and the configuration. Basic conflict handling between the DB and config."""
     queuing_enabled = configuration.dependencies.celery is not None
     async for postgres_session in get_postgres_session():
         global_context.model_registry = ModelRegistry(
